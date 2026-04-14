@@ -20,7 +20,7 @@
 // ────────────────────────────────────────────────────────────────
 
 // Allow production deployment via Environment Variable fallback
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
+const BASE_URL = import.meta.env.VITE_API_URL || "https://vectormindb-1.onrender.com";
 
 /** Default timeout in milliseconds for all API requests */
 const DEFAULT_TIMEOUT_MS = 15_000;
