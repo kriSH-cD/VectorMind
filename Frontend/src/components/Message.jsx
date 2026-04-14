@@ -1,39 +1,31 @@
-/**
- * VectorMind — Message Component
- * =================================
- * Renders a single chat message (user or assistant).
- * Assistant messages include source citations if available.
- */
-
-import { User, Brain } from "lucide-react";
-import SourceList from "./SourceList";
-
-export default function Message({ message }) {
+export default function Message({ message, onOpenSource }) {
   const isUser = message.role === "user";
 
   const cleanContent = (text) => {
     if (!text) return "";
-    // Remove inline citations (e.g. "(Page 5, document.pdf)") so sources
-    // aren't visually mixed into the main text body.
     return text.replace(/\(Page\s+\d+,\s+[^)]+\)/gi, "").trim();
   };
 
   return (
     <div className={`message message--${message.role}`}>
-      <div className="message__avatar">
-        {isUser ? <User size={16} /> : <Brain size={16} />}
+      <div className="message__bubble">
+        {cleanContent(message.content)}
       </div>
 
-      <div className="message__content" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        <div className="message__text" style={{ whiteSpace: "pre-wrap" }}>
-          {cleanContent(message.content)}
+      {!isUser && message.sources && message.sources.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+          {message.sources.map((source, idx) => (
+            <button 
+              key={idx} 
+              className="source-pill"
+              onClick={() => onOpenSource(source)}
+            >
+              <span className="icon" style={{ fontSize: '14px' }}>find_in_page</span>
+              Page {source.page}: {source.file?.split('/').pop() || 'Context'}
+            </button>
+          ))}
         </div>
-
-        {/* Show sources only for assistant messages */}
-        {!isUser && message.sources && message.sources.length > 0 && (
-          <SourceList sources={message.sources} />
-        )}
-      </div>
+      )}
     </div>
   );
 }

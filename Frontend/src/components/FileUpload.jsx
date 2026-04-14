@@ -1,20 +1,7 @@
-/**
- * VectorMind — FileUpload Component
- * ====================================
- * Drag-and-drop PDF upload zone with document selector.
- *
- * Features:
- *   - Drag & drop support with visual feedback
- *   - Click-to-browse fallback
- *   - Upload progress/status indicators
- *   - List of uploaded documents with active selection
- */
-
 import { useState, useRef } from "react";
-import { Paperclip, Loader, Check, FileText } from "lucide-react";
 import { uploadFile } from "../services/api";
 
-export default function FileUpload({ selectedFile, onUploadComplete }) {
+export default function FileUpload({ onUploadComplete }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const fileInputRef = useRef(null);
@@ -28,8 +15,8 @@ export default function FileUpload({ selectedFile, onUploadComplete }) {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setError("File exceeds 10MB limit.");
+    if (file.size > 50 * 1024 * 1024) { // Updated to 50MB per design
+      setError("File exceeds 50MB limit.");
       return;
     }
 
@@ -49,40 +36,51 @@ export default function FileUpload({ selectedFile, onUploadComplete }) {
     }
   };
 
-  // If a file is successfully mapped to this session, show it permanently.
-  if (selectedFile) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 16px", backgroundColor: "rgba(0, 212, 170, 0.1)", borderRadius: "8px", color: "var(--accent-primary)", fontSize: "14px", fontWeight: "500", width: "fit-content" }}>
-        <Check size={14} />
-        <FileText size={14} />
-        Attached: {selectedFile}
-      </div>
-    );
-  }
-
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-      <button
-        onClick={() => !loading && fileInputRef.current?.click()}
-        disabled={loading}
-        className="button"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          backgroundColor: "transparent",
-          border: "1px dashed var(--border-accent)",
-          color: "var(--accent-primary)",
-          padding: "8px 16px",
-          borderRadius: "8px",
-          cursor: loading ? "not-allowed" : "pointer"
-        }}
-      >
-        {loading ? <Loader size={16} className="spinner" /> : <Paperclip size={16} />}
-        {loading ? "Processing Upload..." : "Attach PDF"}
-      </button>
+    <div className="upload-card">
+      <div className="text-center" style={{ marginBottom: '32px' }}>
+        <h1 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '8px' }}>Upload a Document</h1>
+        <p style={{ fontSize: '15px', color: 'var(--text-muted)' }}>Start a conversation to extract insights.</p>
+      </div>
 
-      {error && <span style={{ color: "var(--danger)", fontSize: "12px" }}>{error}</span>}
+      <div 
+        className="dropzone"
+        onClick={() => !loading && fileInputRef.current?.click()}
+      >
+        <div className="dropzone__icon">
+          <span className="icon" style={{ fontSize: '24px' }}>
+            {loading ? 'progress_activity' : 'upload_file'}
+          </span>
+        </div>
+        
+        <p style={{ fontWeight: '600', fontSize: '16px' }}>
+          {loading ? 'Processing Upload...' : 'Drag & drop PDF here'}
+        </p>
+        <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>Limit 50MB per file</p>
+        
+        <button 
+          className="sidebar-item" 
+          style={{ 
+            width: '100%', 
+            maxWidth: '200px', 
+            justifyContent: 'center', 
+            background: 'var(--primary)', 
+            color: 'white',
+            fontWeight: '500' 
+          }}
+          disabled={loading}
+        >
+          Select File
+        </button>
+
+        {error && (
+          <p style={{ marginTop: '12px', color: '#dc2626', fontSize: '13px' }}>{error}</p>
+        )}
+      </div>
+
+      <p style={{ marginTop: '24px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+        Supported formats: PDF. By uploading, you agree to our terms of service and privacy policy.
+      </p>
 
       <input
         ref={fileInputRef}
