@@ -8,29 +8,39 @@ import { askQuestion } from "../services/api";
 export function useChatSessions() {
   const [sessions, setSessions] = useState(() => {
     const saved = localStorage.getItem("chatgpt_sessions");
+    let parsed = [];
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        if (parsed.length > 0) return parsed;
+        const loaded = JSON.parse(saved);
+        // Clean up empty ghost chats from previous sessions
+        parsed = loaded.filter(s => s.messages.length > 1 || s.selectedFile);
       } catch (e) {
         console.error("Failed to parse sessions from localStorage");
       }
     }
-    // Default to one empty chat with greeting if nothing is saved
-    return [
-      {
-        id: crypto.randomUUID(),
-        title: "Chat 1",
-        messages: [
-          { role: "assistant", content: "Hi, how can I help you?", sources: [] }
-        ],
-        selectedFile: null,
-      },
-    ];
+    
+    if (parsed.length > 0) {
+      return parsed;
+    }
+    
+    // Only create a fresh chat on page load if history is entirely empty
+    const freshChat = {
+      id: crypto.randomUUID(),
+      title: "New Chat",
+      messages: [
+        { role: "assistant", content: "Hi, how can I help you?", sources: [] }
+      ],
+      selectedFile: null,
+    };
+
+    return [freshChat];
   });
 
   const [activeSessionId, setActiveSessionId] = useState(() => {
-    // Default to the first session's ID
+    const savedActiveId = localStorage.getItem("chatgpt_active_session");
+    if (savedActiveId && sessions.some(s => s.id === savedActiveId)) {
+        return savedActiveId;
+    }
     return sessions.length > 0 ? sessions[0].id : null;
   });
 
@@ -38,8 +48,17 @@ export function useChatSessions() {
 
   // Persist sessions to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem("chatgpt_sessions", JSON.stringify(sessions));
+    // Optional: Do not persist completely empty chats to prevent infinite clutter
+    const chatsToSave = sessions.filter(s => s.messages.length > 1 || s.selectedFile);
+    localStorage.setItem("chatgpt_sessions", JSON.stringify(chatsToSave));
   }, [sessions]);
+
+  // Persist the currently active tab
+  useEffect(() => {
+    if (activeSessionId) {
+      localStorage.setItem("chatgpt_active_session", activeSessionId);
+    }
+  }, [activeSessionId]);
 
   /**
    * Create a completely new chat session with a default greeting.
@@ -47,7 +66,7 @@ export function useChatSessions() {
   const createNewChat = useCallback(() => {
     const newChat = {
       id: crypto.randomUUID(),
-      title: `Chat ${sessions.length + 1}`,
+      title: "New Chat",
       messages: [
         { role: "assistant", content: "Hi, how can I help you?", sources: [] }
       ],
@@ -55,7 +74,7 @@ export function useChatSessions() {
     };
     setSessions((prev) => [newChat, ...prev]);
     setActiveSessionId(newChat.id);
-  }, [sessions.length]);
+  }, []);
 
   /**
    * Switch the active chat view.
