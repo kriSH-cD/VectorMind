@@ -27,13 +27,10 @@ export default function ChatBox({ messages, loading, sendMessage, onOpenSource }
     <div className="chat-container">
       <div className="chat-max-width">
         {messages.length === 0 && !loading ? (
-          <div className="chat-empty" style={{ textAlign: 'center', marginTop: '40px' }}>
-            <div className="dropzone__icon" style={{ margin: '0 auto 20px' }}>
-              <span className="icon" style={{ fontSize: '32px' }}>psychology</span>
-            </div>
-            <h2 style={{ fontSize: '20px', marginBottom: '8px' }}>Ask anything about your documents</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
-              Upload a PDF and VectorMind will find precise answers using Hybrid RAG.
+          <div className="chat-empty" style={{ textAlign: 'center', marginTop: '80px' }}>
+            <h2 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.04em', marginBottom: '8px' }}>Start Research</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+              Ask a precise question from the active document.
             </p>
           </div>
         ) : (
