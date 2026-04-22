@@ -25,32 +25,37 @@ export default function ChatBox({ messages, loading, sendMessage, onOpenSource }
 
   return (
     <div className="chat-container">
-      <div className="chat-max-width">
-        {messages.length === 0 && !loading ? (
-          <div className="chat-empty" style={{ textAlign: 'center', marginTop: '80px' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: '800', letterSpacing: '-0.04em', marginBottom: '8px' }}>Start Research</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-              Ask a precise question from the active document.
-            </p>
-          </div>
-        ) : (
-          messages.map((msg, index) => (
+      {messages.length === 0 && !loading ? (
+        <div className="chat-empty-state">
+          <h2 className="chat-empty-state__title">Start Research</h2>
+          <p className="chat-empty-state__subtitle">
+            Ask a precise question from the active document.
+          </p>
+        </div>
+      ) : (
+        <div className="messages-list">
+          {messages.map((msg, index) => (
             <Message key={index} message={msg} onOpenSource={onOpenSource} />
-          ))
-        )}
-
-        {loading && (
-          <div className="message message--assistant">
-            <div className="message__bubble">
-              <span className="icon spinner" style={{ color: 'var(--primary)', fontSize: '24px' }}>progress_activity</span>
+          ))}
+          
+          {loading && (
+            <div className="message message--assistant">
+              <div className="message-avatar">
+                <span className="icon spinner loading-icon">graphic_eq</span>
+              </div>
+              <div className="message__bubble">
+                <span className="icon spinner loading-icon" style={{ fontSize: '16px' }}>progress_activity</span>
+              </div>
             </div>
-          </div>
-        )}
-
-        <div ref={bottomRef} />
-      </div>
+          )}
+          <div ref={bottomRef} style={{ height: '150px' }} />
+        </div>
+      )}
 
       <div className="input-area-fixed">
+        <p className="input-disclaimer">
+          AI can make mistakes. Verify important information against the source document.
+        </p>
         <div className="input-container">
           <textarea
             value={input}
@@ -60,11 +65,6 @@ export default function ChatBox({ messages, loading, sendMessage, onOpenSource }
             placeholder="Ask a question about the document..."
             rows={1}
             className="chat-textarea"
-            style={{ 
-              height: 'auto',
-              minHeight: '48px',
-              overflowY: 'hidden'
-            }}
             onInput={(e) => {
               e.target.style.height = 'auto';
               e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
@@ -78,9 +78,6 @@ export default function ChatBox({ messages, loading, sendMessage, onOpenSource }
             <span className="icon">arrow_upward</span>
           </button>
         </div>
-        <p style={{ textAlign: 'center', fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>
-          AI can make mistakes. Verify important information against the source document.
-        </p>
       </div>
     </div>
   );

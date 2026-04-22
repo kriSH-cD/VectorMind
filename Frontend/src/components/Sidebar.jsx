@@ -35,24 +35,14 @@ export default function Sidebar({ sessions, activeSessionId, onNewChat, onSelect
 
   return (
     <aside className="sidebar">
-      <div className="sidebar__new-chat">
-        <button 
-          onClick={onNewChat}
-          className="sidebar-item"
-          style={{ 
-            width: "100%", 
-            justifyContent: "center", 
-            background: "var(--primary)",
-            color: "white",
-            border: "none",
-            fontWeight: "600",
-            height: "40px"
-          }}
-        >
-          <span className="icon" style={{ fontSize: '18px', marginRight: '8px' }}>add</span>
-          New Chat
-        </button>
+      <div className="sidebar-header">
+        <div className="sidebar-logo-text">VectorMind</div>
       </div>
+
+      <button className="sidebar-new-btn" onClick={onNewChat}>
+        <span className="icon">add</span>
+        <span>New Chat</span>
+      </button>
 
       <div className="sidebar__history">
         {groups.today.length > 0 && (
@@ -64,17 +54,18 @@ export default function Sidebar({ sessions, activeSessionId, onNewChat, onSelect
 
         {groups.previous.length > 0 && (
           <>
-            <div className="history-group-label">Previous 7 Days</div>
+            <div className="history-group-label">Previous</div>
             {groups.previous.map(s => renderItem(s))}
           </>
         )}
 
         {sessions.length === 0 && (
-          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+          <div className="sidebar-empty">
             No chats found
           </div>
         )}
       </div>
+
     </aside>
   );
 
@@ -85,51 +76,50 @@ export default function Sidebar({ sessions, activeSessionId, onNewChat, onSelect
     return (
       <div
         key={session.id}
-        onClick={() => !isEditing && onSelectChat(session.id)}
+        onClick={() => {
+          if (isActive) {
+            setEditingId(session.id);
+            setEditTitle(session.title);
+          } else {
+            onSelectChat(session.id);
+          }
+        }}
         className={`sidebar-item ${isActive ? 'sidebar-item--active' : ''}`}
-        style={{ position: 'relative' }}
       >
-        <span className="icon" style={{ 
-          fontSize: '18px', 
-          color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-          flexShrink: 0 
-        }}>description</span>
+        <span className="icon sidebar-item__icon">
+          {isActive ? "chat_bubble" : "description"}
+        </span>
         
         {isEditing ? (
           <input 
             autoFocus
+            className="sidebar-item__input"
             value={editTitle}
             onChange={(e) => setEditTitle(e.target.value)}
+            onBlur={(e) => submitEdit(e, session.id)}
             onKeyDown={(e) => {
               if (e.key === "Enter") submitEdit(e, session.id);
               if (e.key === "Escape") setEditingId(null);
             }}
             onClick={(e) => e.stopPropagation()}
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontSize: "14px",
-              color: "inherit"
-            }}
           />
         ) : (
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span className="sidebar-item__title">
             {session.title}
           </span>
         )}
 
-        <div className="item-actions" style={{ display: 'flex', gap: '4px' }}>
-          {!isEditing && (
-            <button 
-              onClick={(e) => startEdit(e, session)}
-              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
-            >
-              <span className="icon" style={{ fontSize: '16px' }}>more_horiz</span>
-            </button>
-          )}
-        </div>
+        {!isEditing && (
+          <button 
+            className="sidebar-item__action"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteChat(session.id);
+            }}
+          >
+            <span className="icon" style={{ fontSize: '16px' }}>delete</span>
+          </button>
+        )}
       </div>
     );
   }

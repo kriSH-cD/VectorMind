@@ -1,9 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { askQuestion } from "../services/api";
 
 /**
- * useChatSessions Hook
- * Manages multiple chat sessions using localStorage for persistence.
+ * useChatSessions Hook (Chat-Scoped)
+ * =====================================
+ * Manages multiple isolated chat sessions.
+ * 
+ * Key isolation guarantees:
+ *   - New Chat: fresh id, empty messages, null selectedFile
+ *   - sendMessage: reads current session from ref (not stale closure)
+ *   - askQuestion: sends chat_id + current chat's history only
+ *   - No cross-chat data leakage anywhere in the pipeline
  */
 export function useChatSessions() {
   const [sessions, setSessions] = useState(() => {
@@ -46,10 +53,28 @@ export function useChatSessions() {
 
   const [loading, setLoading] = useState(false);
 
-  // Persist sessions to localStorage whenever they change
+  // ── Refs for stable access in callbacks ──
+  // Using refs prevents stale closures in sendMessage and handleIngestComplete.
+  const sessionsRef = useRef(sessions);
+  const activeSessionIdRef = useRef(activeSessionId);
+
   useEffect(() => {
-    // Optional: Do not persist completely empty chats to prevent infinite clutter
-    const chatsToSave = sessions.filter(s => s.messages.length > 1 || s.selectedFile);
+    sessionsRef.current = sessions;
+  }, [sessions]);
+
+  useEffect(() => {
+    activeSessionIdRef.current = activeSessionId;
+  }, [activeSessionId]);
+
+  // Persist sessions to localStorage whenever they change.
+  // Strip `isNew` from messages so typing animation doesn't replay on refresh.
+  useEffect(() => {
+    const chatsToSave = sessions
+      .filter(s => s.messages.length > 1 || s.selectedFile)
+      .map(s => ({
+        ...s,
+        messages: s.messages.map(({ isNew, ...rest }) => rest),
+      }));
     localStorage.setItem("chatgpt_sessions", JSON.stringify(chatsToSave));
   }, [sessions]);
 
@@ -61,7 +86,8 @@ export function useChatSessions() {
   }, [activeSessionId]);
 
   /**
-   * Create a completely new chat session with a default greeting.
+   * Create a completely new chat session — clean slate.
+   * Fresh UUID, empty messages, no selected file.
    */
   const createNewChat = useCallback(() => {
     const newChat = {
@@ -99,11 +125,9 @@ export function useChatSessions() {
   const deleteSession = useCallback((id) => {
     setSessions((prev) => {
       const filtered = prev.filter(session => session.id !== id);
-      // If we deleted the active session, fallback to the first one available
-      if (activeSessionId === id && filtered.length > 0) {
+      if (activeSessionIdRef.current === id && filtered.length > 0) {
         setActiveSessionId(filtered[0].id);
       } else if (filtered.length === 0) {
-        // If we deleted the last session, create a default one
         const fallbackId = crypto.randomUUID();
         setActiveSessionId(fallbackId);
         return [{
@@ -117,16 +141,16 @@ export function useChatSessions() {
       }
       return filtered;
     });
-  }, [activeSessionId]);
+  }, []);
 
   /**
-   * Add a message to the currently active session.
-   * NOTE: This allows us to hook up backend API calls iteratively later.
+   * Add a message to a SPECIFIC session by ID (not necessarily the active one).
+   * Uses functional update to avoid stale state.
    */
-  const addMessageToActiveSession = useCallback((message) => {
+  const addMessageToSession = useCallback((sessionId, message) => {
     setSessions((prev) =>
       prev.map((session) => {
-        if (session.id === activeSessionId) {
+        if (session.id === sessionId) {
           return {
             ...session,
             messages: [...session.messages, message],
@@ -135,43 +159,85 @@ export function useChatSessions() {
         return session;
       })
     );
-  }, [activeSessionId]);
+  }, []);
 
   /**
-   * File Upload Integrator: Maps a document to the active session
-   * and triggers an auto-summarization sequence.
+   * Extract chat history suitable for sending to the backend.
+   * Only includes role and content — no sources or metadata.
+   * Limited to last 10 messages to prevent prompt overflow.
    */
-  const attachFileToSession = useCallback(async (filename) => {
-    // 1. Map file to session and automatically rename the chat title
-    const cleanTitle = filename.replace(/\.pdf$/i, "");
-    
-    setSessions((prev) =>
-      prev.map((session) =>
-        session.id === activeSessionId 
-          ? { ...session, selectedFile: filename, title: cleanTitle } 
-          : session
-      )
-    );
+  const getChatHistory = useCallback((sessionId) => {
+    const session = sessionsRef.current.find(s => s.id === sessionId);
+    if (!session) return [];
 
-    // 2. Add placeholder loading message for the summary
-    addMessageToActiveSession({ 
+    return session.messages
+      .filter(m => m.content && m.role)
+      .slice(-10)
+      .map(m => ({
+        role: m.role,
+        content: m.content,
+      }));
+  }, []);
+
+  /**
+   * Ingest Complete Handler: Updates the session after files or text are ingested.
+   * Captures activeSessionId at call time to prevent cross-chat contamination.
+   */
+  const handleIngestComplete = useCallback(async (type, data) => {
+    // Capture the current session ID AT CALL TIME — not from stale closure
+    const currentSessionId = activeSessionIdRef.current;
+    let displayLabel = "";
+
+    if (type === "files") {
+      displayLabel = data.join(", ");
+      const cleanTitle = data.length === 1 ? data[0].replace(/\.pdf$/i, "") : `${data.length} Documents`;
+      
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === currentSessionId 
+            ? { ...session, selectedFile: data.length === 1 ? data[0] : "Multiple Files", title: cleanTitle } 
+            : session
+        )
+      );
+    } else if (type === "text") {
+      displayLabel = data;
+      
+      setSessions((prev) =>
+        prev.map((session) =>
+          session.id === currentSessionId 
+            ? { ...session, selectedFile: data, title: data } 
+            : session
+        )
+      );
+    }
+
+    addMessageToSession(currentSessionId, { 
       role: "user", 
-      content: `Uploaded: ${filename}`, 
+      content: `Ingested: ${displayLabel}`, 
       sources: [] 
     });
 
     setLoading(true);
     try {
-      // 3. Call backend pipeline to summarize
-      const response = await askQuestion("Summarize this document", filename);
+      const contextFile = (type === "files" && data.length > 1) ? null : (type === "files" ? data[0] : data);
+      const chatHistory = getChatHistory(currentSessionId);
       
-      addMessageToActiveSession({
+      const response = await askQuestion(
+        "Summarize the ingested content",
+        contextFile,
+        currentSessionId,   // chat_id — scopes to this chat's collection
+        chatHistory          // only this chat's history
+      );
+      
+      addMessageToSession(currentSessionId, {
         role: "assistant",
         content: response.answer,
         sources: response.sources || [],
+        responseTime: response.responseTime,
+        isNew: true,
       });
     } catch (error) {
-      addMessageToActiveSession({
+      addMessageToSession(currentSessionId, {
         role: "assistant",
         content: `Error generating summary: ${error.message}`,
         sources: [],
@@ -179,11 +245,19 @@ export function useChatSessions() {
     } finally {
       setLoading(false);
     }
-  }, [activeSessionId, addMessageToActiveSession]);
+  }, [addMessageToSession, getChatHistory]);
+
+  /**
+   * Backward compatibility
+   */
+  const attachFileToSession = useCallback((filename) => {
+    handleIngestComplete("files", [filename]);
+  }, [handleIngestComplete]);
 
   /**
    * Process a user query.
-   * Intercepts simple greetings to answer locally without backend calls.
+   * Reads session state from ref to prevent stale closures.
+   * Sends only THIS chat's history and chat_id.
    */
   const sendMessage = useCallback(async (query) => {
     if (!query || !query.trim()) return;
@@ -191,37 +265,50 @@ export function useChatSessions() {
     const trimmed = query.trim();
     const lowerQuery = trimmed.toLowerCase();
 
+    // Capture current session at call time
+    const currentSessionId = activeSessionIdRef.current;
+
     // 1. Add user message
-    addMessageToActiveSession({ role: "user", content: trimmed, sources: [] });
+    addMessageToSession(currentSessionId, { role: "user", content: trimmed, sources: [] });
 
     // 2. Local Greeting Interceptor
     if (["hi", "hello", "hey"].includes(lowerQuery)) {
       setTimeout(() => {
-        addMessageToActiveSession({
+        addMessageToSession(currentSessionId, {
           role: "assistant",
           content: "Hello! How can I assist you with your document?",
           sources: [],
         });
-      }, 400); // Small delay to feel natural
-      return; // Exit early, do not call backend
+      }, 400);
+      return;
     }
 
-    // 3. Extranct file context from active session
-    const currentSession = sessions.find(s => s.id === activeSessionId);
+    // 3. Extract file context from the CURRENT session (via ref, not stale closure)
+    const currentSession = sessionsRef.current.find(s => s.id === currentSessionId);
     const fileContext = currentSession?.selectedFile || null;
 
-    // 4. Call real backend API
+    // 4. Build chat history from THIS session only
+    const chatHistory = getChatHistory(currentSessionId);
+
+    // 5. Call backend API with chat_id and history
     setLoading(true);
     try {
-      const response = await askQuestion(trimmed, fileContext);
+      const response = await askQuestion(
+        trimmed,
+        fileContext,
+        currentSessionId,   // chat_id — scopes retrieval to this chat
+        chatHistory          // only this chat's messages
+      );
       
-      addMessageToActiveSession({ 
+      addMessageToSession(currentSessionId, { 
         role: "assistant", 
         content: response.answer, 
-        sources: response.sources || [] 
+        sources: response.sources || [],
+        responseTime: response.responseTime,
+        isNew: true
       });
     } catch (error) {
-      addMessageToActiveSession({ 
+      addMessageToSession(currentSessionId, { 
         role: "assistant", 
         content: `API Error: ${error.message}`, 
         sources: [] 
@@ -230,9 +317,9 @@ export function useChatSessions() {
       setLoading(false);
     }
 
-  }, [activeSessionId, sessions, addMessageToActiveSession]);
+  }, [addMessageToSession, getChatHistory]);
 
-  // Derived state: Get the currently active session object easily
+  // Derived state
   const activeSession = sessions.find((s) => s.id === activeSessionId) || null;
 
   return {
@@ -246,5 +333,6 @@ export function useChatSessions() {
     deleteSession,
     sendMessage,
     attachFileToSession,
+    handleIngestComplete,
   };
 }

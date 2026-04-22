@@ -1,31 +1,33 @@
 import { useState, useRef } from "react";
-import { uploadFile } from "../services/api";
+import { uploadFiles, ingestText } from "../services/api";
 
-export default function FileUpload({ onUploadComplete }) {
+export default function FileUpload({ onIngestComplete, chatId }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [mode, setMode] = useState("file"); // "file" or "text"
+  const [rawText, setRawText] = useState("");
+  const [textLabel, setTextLabel] = useState("");
   const fileInputRef = useRef(null);
 
-  const handleInputChange = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
 
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setError("Only PDF files are supported.");
-      return;
+    const validFiles = files.filter(f => f.name.toLowerCase().endsWith(".pdf"));
+    if (validFiles.length !== files.length) {
+      setError("Only PDF files are supported. Some files were skipped.");
     }
 
-    if (file.size > 50 * 1024 * 1024) { // Updated to 50MB per design
-      setError("File exceeds 50MB limit.");
-      return;
-    }
+    if (validFiles.length === 0) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const result = await uploadFile(file);
-      onUploadComplete(result.filename);
+      // Pass chatId so embeddings go to this chat's collection
+      const result = await uploadFiles(validFiles, chatId);
+      const filenames = result.results.map(r => r.filename);
+      onIngestComplete("files", filenames);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -36,58 +38,117 @@ export default function FileUpload({ onUploadComplete }) {
     }
   };
 
+  const handleTextSubmit = async () => {
+    if (!rawText.trim()) {
+      setError("Please enter some text.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const label = textLabel.trim() || "Raw Text Snippet";
+      // Pass chatId so embeddings go to this chat's collection
+      const result = await ingestText(rawText, label, chatId);
+      onIngestComplete("text", result.filename);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="upload-card">
-      <div className="text-center" style={{ marginBottom: '40px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-0.03em', marginBottom: '8px' }}>VectorMind</h1>
-        <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Upload a PDF to begin research.</p>
+      <div className="upload-header">
+        <h1 className="upload-title">VectorMind</h1>
+        <p className="upload-subtitle">Select documents or paste text to begin research.</p>
       </div>
 
-      <div 
-        className="dropzone"
-        onClick={() => !loading && fileInputRef.current?.click()}
-      >
-        <div className="dropzone__icon">
-          <span className="icon" style={{ fontSize: '24px' }}>
-            {loading ? 'progress_activity' : 'upload_file'}
-          </span>
-        </div>
-        
-        <p style={{ fontWeight: '600', fontSize: '16px' }}>
-          {loading ? 'Processing Upload...' : 'Drag & drop PDF here'}
-        </p>
-        <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>Limit 50MB per file</p>
-        
+      <div className="upload-tabs">
         <button 
-          className="sidebar-item" 
-          style={{ 
-            width: '100%', 
-            maxWidth: '200px', 
-            justifyContent: 'center', 
-            background: 'var(--primary)', 
-            color: 'white',
-            fontWeight: '500' 
-          }}
-          disabled={loading}
+          className={`upload-tab ${mode === "file" ? "active" : ""}`}
+          onClick={() => setMode("file")}
         >
-          Select File
+          <span className="icon">upload_file</span> Documents
         </button>
-
-        {error && (
-          <p style={{ marginTop: '12px', color: '#dc2626', fontSize: '13px' }}>{error}</p>
-        )}
+        <button 
+          className={`upload-tab ${mode === "text" ? "active" : ""}`}
+          onClick={() => setMode("text")}
+        >
+          <span className="icon">edit_note</span> Paste Text
+        </button>
       </div>
 
-      <p style={{ marginTop: '24px', fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-        Supported formats: PDF. By uploading, you agree to our terms of service and privacy policy.
+      {mode === "file" ? (
+        <div 
+          className="dropzone"
+          onClick={() => !loading && fileInputRef.current?.click()}
+        >
+          <div className="dropzone__icon">
+            <span className={`icon ${loading ? 'spinner' : ''}`}>
+              {loading ? 'progress_activity' : 'upload_file'}
+            </span>
+          </div>
+          
+          <p className="dropzone__text">
+            {loading ? 'Processing Documents...' : 'Click or Drag PDFs here'}
+          </p>
+          <p className="dropzone__hint">Multiple files supported (Max 10MB each)</p>
+          
+          <button 
+            className="select-file-btn"
+            disabled={loading}
+          >
+            Select Files
+          </button>
+
+          {error && (
+            <p className="upload-error">{error}</p>
+          )}
+        </div>
+      ) : (
+        <div className="text-ingest-area">
+          <input 
+            type="text" 
+            placeholder="Label (e.g. My Notes)" 
+            className="text-ingest-label"
+            value={textLabel}
+            onChange={(e) => setTextLabel(e.target.value)}
+            disabled={loading}
+          />
+          <textarea 
+            className="text-ingest-textarea"
+            placeholder="Paste your text here..."
+            value={rawText}
+            onChange={(e) => setRawText(e.target.value)}
+            disabled={loading}
+          />
+          <button 
+            className="ingest-btn"
+            onClick={handleTextSubmit}
+            disabled={loading || !rawText.trim()}
+          >
+            {loading ? <span className="icon spinner">progress_activity</span> : "Ingest Text"}
+          </button>
+          {error && (
+            <p className="upload-error">{error}</p>
+          )}
+        </div>
+      )}
+
+      <p className="upload-footer">
+        Supported formats: PDF, Raw Text. Your data is processed securely and privately.
       </p>
 
       <input
         ref={fileInputRef}
         type="file"
         accept=".pdf"
+        multiple
         style={{ display: "none" }}
-        onChange={handleInputChange}
+        onChange={handleFileChange}
       />
     </div>
   );

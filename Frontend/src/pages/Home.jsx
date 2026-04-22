@@ -17,10 +17,12 @@ export default function Home() {
     deleteSession,
     sendMessage,
     attachFileToSession,
+    handleIngestComplete,
   } = useChatSessions();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedSource, setSelectedSource] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const handleOpenSource = (source) => {
     setSelectedSource(source);
@@ -34,18 +36,26 @@ export default function Home() {
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
       {/* ── SIDEBAR ── */}
-      <Sidebar 
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onNewChat={createNewChat}
-        onSelectChat={switchSession}
-        onRenameChat={renameSession}
-        onDeleteChat={deleteSession}
-      />
+      <div className={`sidebar ${!isSidebarOpen ? 'sidebar--collapsed' : ''}`}>
+        <Sidebar 
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onNewChat={createNewChat}
+          onSelectChat={switchSession}
+          onRenameChat={renameSession}
+          onDeleteChat={deleteSession}
+        />
+      </div>
 
       {/* ── MAIN CONTENT ── */}
       <main className="main-layout">
         <header className="chat-header">
+          <button 
+            className="toggle-sidebar-btn"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          >
+            <span className="icon">{isSidebarOpen ? 'menu_open' : 'menu'}</span>
+          </button>
           <h1 className="chat-header__title">
             {activeSession?.selectedFile || "New Conversation"}
           </h1>
@@ -60,7 +70,10 @@ export default function Home() {
           />
         ) : (
           <div className="center-view">
-            <FileUpload onUploadComplete={attachFileToSession} />
+            <FileUpload 
+              onIngestComplete={handleIngestComplete} 
+              chatId={activeSessionId}
+            />
           </div>
         )}
 
