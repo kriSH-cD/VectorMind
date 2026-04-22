@@ -38,9 +38,9 @@ export default function FileUpload({ onUploadComplete }) {
 
   return (
     <div className="upload-card">
-      <div className="text-center" style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: '600', marginBottom: '8px' }}>Upload a Document</h1>
-        <p style={{ fontSize: '15px', color: 'var(--text-muted)' }}>Start a conversation to extract insights.</p>
+      <div className="text-center" style={{ marginBottom: '40px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: '800', letterSpacing: '-0.03em', marginBottom: '8px' }}>VectorMind</h1>
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Upload a PDF to begin research.</p>
       </div>
 
       <div 

@@ -3,18 +3,13 @@ import { useState, useMemo } from "react";
 export default function Sidebar({ sessions, activeSessionId, onNewChat, onSelectChat, onRenameChat, onDeleteChat }) {
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const filteredSessions = useMemo(() => {
-    return sessions.filter(s => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [sessions, searchQuery]);
 
   const groups = useMemo(() => {
     const today = [];
     const previous = [];
     const now = new Date();
     
-    filteredSessions.forEach(session => {
+    sessions.forEach(session => {
       const date = new Date(session.updatedAt || Date.now());
       const diff = (now - date) / (1000 * 60 * 60 * 24);
       if (diff < 1) today.push(session);
@@ -22,7 +17,7 @@ export default function Sidebar({ sessions, activeSessionId, onNewChat, onSelect
     });
 
     return { today, previous };
-  }, [filteredSessions]);
+  }, [sessions]);
 
   const startEdit = (e, session) => {
     e.stopPropagation();
@@ -47,35 +42,16 @@ export default function Sidebar({ sessions, activeSessionId, onNewChat, onSelect
           style={{ 
             width: "100%", 
             justifyContent: "center", 
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-light)",
-            boxShadow: "var(--shadow-sm)",
-            fontWeight: "500"
+            background: "var(--primary)",
+            color: "white",
+            border: "none",
+            fontWeight: "600",
+            height: "40px"
           }}
         >
           <span className="icon" style={{ fontSize: '18px', marginRight: '8px' }}>add</span>
           New Chat
         </button>
-      </div>
-
-      <div className="sidebar__search">
-        <div style={{ position: 'relative' }}>
-          <span className="icon" style={{ 
-            position: 'absolute', 
-            left: '8px', 
-            top: '50%', 
-            transform: 'translateY(-50%)',
-            fontSize: '18px',
-            color: 'var(--text-muted)'
-          }}>search</span>
-          <input 
-            type="text" 
-            placeholder="Search chats..." 
-            className="search-input"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
       </div>
 
       <div className="sidebar__history">
@@ -93,7 +69,7 @@ export default function Sidebar({ sessions, activeSessionId, onNewChat, onSelect
           </>
         )}
 
-        {filteredSessions.length === 0 && (
+        {sessions.length === 0 && (
           <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
             No chats found
           </div>
